@@ -1,0 +1,242 @@
+apiVersion: "k8s.f5net.com/v1"
+kind: F5BigCneIrule
+metadata:
+  name: "irule-one"
+  namespace: nim
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: my-httproute-gateway
+    sectionName: http
+  iRule: >
+    when RULE_INIT {
+      set static::ip_ih "10.104.143.149:8000"
+
+      set static::ih ""
+      append static::ih "POST /v2/models/task_router_ensemble/infer HTTP/1.1\r\n"
+      append static::ih "Host: $static::ip_ih\r\n"
+      append static::ih "Content-Type: application/json\r\n"
+      append static::ih "Connection: close\r\n"
+      append static::ih "Content-Length: CLEN\r\n"
+      append static::ih "\r\n"
+
+      set static::timeout 84600
+      set static::lifetime 84600
+
+      # premium token limit
+      set static::token_limit_1 100
+      # access limit
+      set static::token_limit_2 1000
+      #set static::llm_name_basic "deepseek-ai/deepseek-r1-distill-qwen-7b"
+      # table key for tokens
+      set static::key ""      
+      #set hsl [HSL::open -proto UDP -pool default-log-publisher-pool-pool] 
+    }
+
+    when HTTP_REQUEST {
+      log local0.debug "Request: Client IP address [IP::local_addr], [virtual] [IP::client_addr], [TCP::local_port]"
+
+      HTTP::collect 1024
+    }
+  
+    when HTTP_REQUEST_DATA {
+     # define key for token table
+      set auth_header [HTTP::header "Authorization"]
+      set key ""
+      if { $auth_header ne "" } {
+        set key [string range $auth_header 7 end]
+      } else {
+        set source_ip [IP::client_addr]
+        set source_port [TCP::client_port]
+        set key "$source_ip:$source_port"
+      }
+      set static::key $key
+    
+      # check access token limit
+      set out_count [table lookup -notouch -subtable "tokens_map_out" $key]
+      if {$out_count  > $static::token_limit_2} {
+         set msg "Client $key reached limit($static::token_limit_2) of used tokens($out_count): Access to LLM is blocked."
+
+         HTTP::respond 403 content $msg "Content-Type" "text/plain"
+         log local0. "$msg"
+         set hsl_handle [HSL::open -proto UDP -pool default-log-publisher-pool-pool]
+         HSL::send $hsl_handle "<134> $msg\n"
+         return
+      }
+
+
+      # set router server request 
+      set ipt [string trim { {"inputs":[{"name":"INPUT","datatype":"BYTES","shape":[1,1],"data":["DATA"]}]} }]
+      log local0. "Router server request: $ipt"
+
+      set p [HTTP::payload]
+      set data [findstr $p {"content": "} 12 {"}]
+      log local0. "data: $data"
+      set ip [string map [list DATA $data] $ipt]
+      set len [string length $ip]
+      set ih [string map [list CLEN $len] $static::ih]
+      set sb [connect -protocol TCP "$static::ip_ih"]
+      log local0. "Request: $ih$ip"
+      send $sb $ih$ip
+      # retry 100 times
+      foreach x [string repeat "x " 10] {
+        set bytes [recv -peek  $sb resp]
+        log local0. "Response: $resp"
+        if { $bytes > 0 } {
+          set result [findstr $resp {"data":[} 8 {]}]
+          if { [string length $result] >= 47 } {
+            break
+          }
+        }
+        after 1
+      }
+      close $sb
+      log local0. "Result: $result"
+      switch $result {
+      "1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0" {
+         log local0. "request classified as Brainstorming - using Deepseek"
+         set llm_name "deepseek-ai/deepseek-r1-distill-qwen-7b"
+      } 
+      "0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0" {
+         log local0. "request classified as Chatbot - using Google Gemma"
+         set llm_name "google/gemma-2-2b-instruct"
+      }
+      "0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0" {
+         log local0. "request classified as Classification - using Deepseek"
+         set llm_name "deepseek-ai/deepseek-r1-distill-qwen-7b"
+      }
+      "0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0" {
+         log local0. "request classified as ClosedQA - using Google Gemma"
+         set llm_name "google/gemma-2-2b-instruct"
+      }
+      "0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0" {
+         log local0. "request classified as Code Generation - using Deepseek"
+         set llm_name "deepseek-ai/deepseek-r1-distill-qwen-7b"
+      }
+      "0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0" {
+         log local0. "request classified as Extraction - using Google Gemma"
+         set llm_name "google/gemma-2-2b-instruct"
+      }
+      "0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0" {
+         log local0. "request classified as Open QA - using Google Gemma" 
+         set llm_name "google/gemma-2-2b-instruct"
+      }
+      "0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0" {
+         log local0. "request classified as Other - using Deepseek"
+         set llm_name "deepseek-ai/deepseek-r1-distill-qwen-7b"
+      } 
+      "0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0" {
+         log local0. "request classified as Rewrite - using Google Gemma"
+         set llm_name "google/gemma-2-2b-instruct"
+      }
+      "0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0" {
+         log local0. "request classified as Summarization - using Google Gemma"
+         set llm_name "google/gemma-2-2b-instruct"
+      }
+      "0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0" {
+         log local0. "request classified as Text Generation - using Goole Gemma"
+         set llm_name "google/gemma-2-2b-instruct"
+      }
+      "0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0" {
+         log local0. "request classified as Unknown - using Deepseek"
+         set llm_name "deepseek-ai/deepseek-r1-distill-qwen-7b"
+      }
+      }
+
+      # For now we do not use outbound classification result.
+      # switch to basic if limit reached
+      if {$out_count  > $static::token_limit_1} {
+         set llm_name "google/gemma-2-2b-instruct"
+
+         set msg "Client $key reached premium token limit($static::token_limit_1). Switching to basic model $llm_name."
+        log local0. "$msg"
+        set hsl_handle [HSL::open -proto UDP -pool default-log-publisher-pool-pool]
+        HSL::send $hsl_handle "<134> $msg\n"
+      } else {
+        set llm_name "deepseek-ai/deepseek-r1-distill-qwen-7b"
+
+        set msg "Client $key: using premium model $llm_name. Token used: $out_count."
+        log local0. "$msg"
+      }
+  
+      log local0.debug "BODY:\n$p"
+ 
+      set before {"model": ""}
+      set quote {"}
+      #$set after [format {"model": "$llm_name"}]
+      set after "${quote}model${quote}: ${quote}${llm_name}${quote}"
+      set new_p [string map [list $before $after] $p]
+      log local0.debug "REPLACED BODY:\n$new_p"
+      HTTP::payload replace 0 [HTTP::payload length] $new_p
+
+      set p1 [HTTP::payload]
+
+      set model_value [findstr $p1 {"model":} 8 ","]
+      #set model [string trim $model {"}]
+      set model_value [string map {" " "" \\" ""} $model_value]      
+      log local0.debug "Model: $model_value"
+
+      switch $model_value {
+        #switch $llm_name 
+        "deepseek-ai/deepseek-r1-distill-qwen-7b" {
+          log local0.debug "Switching to pool 1"
+          pool nim-my-httproute-gateway-192.0.2.133-http-httproute-app-rule-0-pool
+        }
+        "google/gemma-2-2b-instruct" {
+          log local0.debug "Switching to pool 2"
+          pool nim-my-httproute-gateway-192.0.2.133-http2-httproute-app-2-rule-0-pool
+        }
+        default {
+          log local0.debug "Error: model $model_value in not defined."
+          return
+        }
+      }
+
+    }
+
+    when HTTP_RESPONSE {
+      HTTP::collect 65535
+    }
+
+    when HTTP_RESPONSE_DATA {
+        set payload [HTTP::payload]
+        log local0. "Payload: $payload"
+
+        set in_ctokens [findstr $payload {"prompt_tokens":} 16 ","]
+        set in_ctokens [string trim $in_ctokens]
+        if {![string is integer -strict $in_ctokens]} {
+            return
+        }
+        set in_ntokens [expr {$in_ctokens}]
+
+        set out_ctokens [findstr $payload {"completion_tokens":} 20 "\\x7d"]
+        set out_ctokens [string trim $out_ctokens]
+        if {![string is integer -strict $out_ctokens]} {
+            return
+        }
+        set out_ntokens [expr {$out_ctokens}]
+
+        set key $static::key
+
+        set in_count [table lookup -notouch -subtable "tokens_map_in" $key]
+        if {$in_count eq ""} {
+            set in_count $in_ntokens
+        } else {
+            incr in_count $in_ntokens
+        }
+        table set -subtable "tokens_map_in" $key $in_count $static::timeout $static::lifetime
+
+        set out_count [table lookup -notouch -subtable "tokens_map_out" $key]
+        if {$out_count eq ""} {
+            set out_count $out_ntokens
+        } else {
+            incr out_count $out_ntokens
+        }
+        table set -subtable "tokens_map_out" $key $out_count $static::timeout $static::lifetime
+
+        log local0. "Client: $key => in_tokens: $in_count, out_tokens: $out_count"
+        set hsl_handle [HSL::open -proto UDP -pool default-log-publisher-pool-pool]
+        HSL::send $hsl_handle "<134> Client: $key => in_tokens: $in_count, out_tokens: $out_count\n"
+    }
+
