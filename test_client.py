@@ -43,6 +43,40 @@ def send_request(host, port, content):
     return response.decode(errors='replace')
 
 
+def read_after_first_empty_line(text: str, strip_result: bool = True) -> str:
+    """
+    Read a string and return only the content after the first empty line.
+    
+    Args:
+        text (str): The input string to process
+        strip_result (bool): Whether to strip leading/trailing whitespace from result
+    
+    Returns:
+        str: The content after the first empty line, or empty string if no empty line found
+    
+    Examples:
+        >>> text = "Header line\\nAnother header\\n\\nThis is the content\\nMore content"
+        >>> read_after_first_empty_line(text)
+        'This is the content\\nMore content'
+        
+        >>> text = "No empty line here\\nJust normal lines"
+        >>> read_after_first_empty_line(text)
+        ''
+    """
+    lines = text.split('\n')
+    
+    # Find the first empty line
+    for i, line in enumerate(lines):
+        if line.strip() == '':  # Empty line (may contain whitespace)
+            # Return everything after this empty line
+            remaining_lines = lines[i + 1:]
+            result = '\n'.join(remaining_lines)
+            return result.strip() if strip_result else result
+    
+    # No empty line found
+    return ''
+
+
 def read_request_data(file_name, count, offset):
     try:
         queries = []
@@ -104,7 +138,6 @@ def main():
             new_offset = offset+args.number_of_requests
             offset_file.write(str(new_offset))
     queries = read_request_data(args.filename, args.number_of_requests, offset)
-    print(queries)
     for index, query in enumerate(queries):
         response = send_request(args.host, args.port, query)
         if args.show_output:
@@ -113,7 +146,7 @@ def main():
             print(f"+++++++++++++ end response {index+1} of {args.number_of_requests} +++++++++++++")
         elif args.show_tokens:
             try:
-                data = json.loads(response)
+                data = json.loads(read_after_first_empty_line(response))
                 print(f" request {index+1} of {args.number_of_requests} used model: {data['model']} input tokens: {data['usage']['prompt_tokens']} output tokens: {data['usage']['completion_tokens']}")
             except Exception as e:
                 print(f"error in response {index+1} of {args.number_of_requests} - Error: {e}")
