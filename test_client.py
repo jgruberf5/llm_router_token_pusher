@@ -7,19 +7,19 @@ import uuid
 import socket
 import json
 
-def send_request(host, port, content):
+def send_request(host, port, apikey, content):
     path = '/v1/chat/completions'    
     payload = {
         "model": "",
         "messages": [
-            {"role": "user", "content": "Say hello to me in Spanish."}
+            {"role": "user", "content": content}
         ]
     }
     body = json.dumps(payload)
     request = (
         f"POST {path} HTTP/1.1\r\n"
         f"Host: {host}:{port}\r\n"
-        f"Authorization: Bearer sk-4r0mPLExAMPLeKEY1234567890abcdefghi\r\n"
+        f"Authorization: Bearer {apikey}\r\n"
         f"Content-Type: application/json\r\n"
         f"Content-Length: {len(body)}\r\n"
         f"Connection: close\r\n"
