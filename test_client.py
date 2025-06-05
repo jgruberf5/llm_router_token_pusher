@@ -143,9 +143,13 @@ def main():
             new_offset = offset+args.number_of_requests
             offset_file.write(str(new_offset))
 
-    print(f"starting token tester for ${args.apikey}")
     queries = read_request_data(args.filename, args.number_of_requests, offset)
-    print(f"testing {len(queries) + 1} prompts")
+    
+    print(f"+++++++++++++++++++++++++++++++++++++++++++++++")
+    print(f"+ starting token tester for ${args.apikey}")
+    print(f"+ testing {len(queries) + 1} prompts")
+    print(f"+++++++++++++++++++++++++++++++++++++++++++++++")
+    print("\n\n")
     for index, query in enumerate(queries):
         response = send_request(args.host, args.port, args.apikey, query)
         if args.show_output:
