@@ -90,7 +90,7 @@ def read_request_data(file_name, count, offset):
                 for conversation in datem['conversations']:
                     if conversation['from'] == 'human':
                         query = conversation['value'].replace('\n','\\n')
-                        if query:
+                        if len(query) > 2:
                             break
                 queries.append(query)
         return queries
