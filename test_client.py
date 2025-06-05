@@ -139,7 +139,7 @@ def main():
             offset_file.write(str(new_offset))
     queries = read_request_data(args.filename, args.number_of_requests, offset)
     for index, query in enumerate(queries):
-        response = send_request(args.host, args.port, query)
+        response = send_request(args.host, args.port, args.apikey, query)
         if args.show_output:
             print(f"+++++++++++++ start response {index+1} of {args.number_of_requests} +++++++++++++")
             print(response)
