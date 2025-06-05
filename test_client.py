@@ -148,10 +148,15 @@ def main():
             try:
                 data = json.loads(read_after_first_empty_line(response))
                 msg = f" request {index+1} of {args.number_of_requests}"
+                standard_message = False
                 if 'model' in data:
+                    standard_message = True
                     msg = f" {msg} used model: {data['model']}"
                 if 'usage' in data:
+                    standard_message = True
                     msg = f"{msg} input tokens: {data['usage']['prompt_tokens']} output tokens: {data['usage']['completion_tokens']}"
+                if not standard_message:
+                    msg = f"{msg} data: {data}"
                 print(msg)
             except Exception as e:
                 print(f"error in response {index+1} of {args.number_of_requests} - Error: {e}")
