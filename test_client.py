@@ -83,7 +83,7 @@ def read_request_data(file_name, count, offset):
         with(open(file_name, 'r', encoding='utf-8')) as data_file:
             data = json.load(data_file)
             read_index = 0
-            while len(queries) < count:
+            while len(queries) < (count - 1):
                 datem = data[read_index]
                 read_index += 1
                 query = ""
@@ -145,11 +145,13 @@ def main():
 
     queries = read_request_data(args.filename, args.number_of_requests, offset)
     
-    print(f"+++++++++++++++++++++++++++++++++++++++++++++++")
+    print("\n\n")
+    print(f"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
     print(f"+ starting token tester for ${args.apikey}")
     print(f"+ testing {len(queries) + 1} prompts")
-    print(f"+++++++++++++++++++++++++++++++++++++++++++++++")
+    print(f"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
     print("\n\n")
+
     for index, query in enumerate(queries):
         response = send_request(args.host, args.port, args.apikey, query)
         if args.show_output:
