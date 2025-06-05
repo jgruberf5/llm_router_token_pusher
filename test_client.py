@@ -148,9 +148,9 @@ def main():
             try:
                 data = json.loads(read_after_first_empty_line(response))
                 msg = f" request {index+1} of {args.number_of_requests}"
-                if 'model' in json:
+                if 'model' in data:
                     msg = f" {msg} used model: {data['model']}"
-                if 'usage' in json:
+                if 'usage' in data:
                     msg = f"{msg} input tokens: {data['usage']['prompt_tokens']} output tokens: {data['usage']['completion_tokens']}"
                 print(msg)
             except Exception as e:
