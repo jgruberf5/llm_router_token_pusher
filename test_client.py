@@ -82,10 +82,10 @@ def read_request_data(file_name, count, offset):
         queries = []
         with(open(file_name, 'r', encoding='utf-8')) as data_file:
             data = json.load(data_file)
-            start_conversation_index = offset - 1
-            start_conversation_index = max(start_conversation_index, 0)
-            for i in range(start_conversation_index, (start_conversation_index + count)):
-                datem = data[i]
+            read_index = 0
+            while len(queries) < count:
+                datem = data[read_index]
+                read_index += 1
                 query = ""
                 for conversation in datem['conversations']:
                     if conversation['from'] == 'human':
