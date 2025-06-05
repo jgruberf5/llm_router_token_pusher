@@ -151,7 +151,7 @@ def main():
                 msg = f" request {index+1} of {args.number_of_requests}"
                 standard_message = False
                 if data['object'] == 'error':
-                    msg = f" {msg} error: {data['message']}"
+                    msg = f" {msg} query: {query} error: {data['message']}"
                 else:
                     if 'model' in data:
                         standard_message = True
