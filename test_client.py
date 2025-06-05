@@ -159,7 +159,7 @@ def main():
                     msg = f"{msg} data: {data}"
                 print(msg)
             except Exception as e:
-                print(f"error in response {index+1} of {args.number_of_requests} - Error: {e}")
+                print(f"error in response {index+1} of {args.number_of_requests} - Error: {response}")
 
 
 if __name__ == "__main__":
