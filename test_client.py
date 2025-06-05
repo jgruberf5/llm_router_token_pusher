@@ -92,7 +92,8 @@ def read_request_data(file_name, count, offset):
                         query = conversation['value'].replace('\n','\\n')
                         if len(query) > 2:
                             break
-                queries.append(query)
+                if len(query) > 2:
+                    queries.append(query)
         return queries
     except Exception as e:
         print(f"✗ Error: {e}")
@@ -128,17 +129,23 @@ def main():
     if not os.path.isfile(args.filename):
         print(f"Error: '{args.filename}' is not a regular file.", file=sys.stderr)
         sys.exit(1)
+    
+    f = os.path.basename(args.filename)
+    offset_file_name = f".request_offsets_{f}"
     offset = 0
-    if not os.path.isfile('request_offsets'):
-        with(open('request_offsets', 'w', encoding='utf-8')) as offset_file:
+    if not os.path.isfile(offset_file_name):
+        with(open(offset_file_name, 'w', encoding='utf-8')) as offset_file:
             offset_file.write(str(args.number_of_requests))
     else:
-        with(open('request_offsets', 'r', encoding='utf-8')) as offset_file:
+        with(open(offset_file_name, 'r', encoding='utf-8')) as offset_file:
             offset = int(offset_file.read())
-        with(open('request_offsets', 'w+', encoding='utf-8')) as offset_file:
+        with(open(offset_file_name, 'w+', encoding='utf-8')) as offset_file:
             new_offset = offset+args.number_of_requests
             offset_file.write(str(new_offset))
+
+    print(f"starting token tester for ${args.apikey}")
     queries = read_request_data(args.filename, args.number_of_requests, offset)
+    print(f"testing {len(queries)} prompts")
     for index, query in enumerate(queries):
         response = send_request(args.host, args.port, args.apikey, query)
         if args.show_output:
