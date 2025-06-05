@@ -147,7 +147,7 @@ def main():
     
     print("\n\n")
     print(f"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-    print(f"+ starting token tester for ${args.apikey}")
+    print(f"+ starting token tester for {args.apikey}")
     print(f"+ testing {len(queries) + 1} prompts")
     print(f"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
     print("\n\n")
