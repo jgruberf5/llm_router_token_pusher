@@ -147,7 +147,12 @@ def main():
         elif args.show_tokens:
             try:
                 data = json.loads(read_after_first_empty_line(response))
-                print(f" request {index+1} of {args.number_of_requests} used model: {data['model']} input tokens: {data['usage']['prompt_tokens']} output tokens: {data['usage']['completion_tokens']}")
+                msg = f" request {index+1} of {args.number_of_requests}"
+                if 'model' in json:
+                    msg = f" {msg} used model: {data['model']}"
+                if 'usage' in json:
+                    msg = f"{msg} input tokens: {data['usage']['prompt_tokens']} output tokens: {data['usage']['completion_tokens']}"
+                print(msg)
             except Exception as e:
                 print(f"error in response {index+1} of {args.number_of_requests} - Error: {e}")
 
